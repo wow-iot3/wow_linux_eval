@@ -1,0 +1,138 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+
+#include "prefix/wow_check.h"
+#include "prefix/wow_errno.h"
+#include "prefix/wow_common.h"
+#include "prefix/wow_keyword.h"
+
+#include "encode/wow_base64.h"
+
+
+static uint8_t g_encodingTable[] ={'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+                                   'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+                                   'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+                                   'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+                                   'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+                                   'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+                                   'w', 'x', 'y', 'z', '0', '1', '2', '3',
+                                   '4', '5', '6', '7', '8', '9', '+', '/'
+                                  };
+
+static uint8_t g_decodingTable[256] ={
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x3e,0x00,0x00,0x00,0x3f,
+		0x34,0x35,0x36,0x37,0x38,0x39,0x3a,0x3b,0x3c,0x3d,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,
+		0x0f,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x1a,0x1b,0x1c,0x1d,0x1e,0x1f,0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,
+		0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f,0x30,0x31,0x32,0x33,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+};
+static uint32_t g_modTable[] = { 0, 2, 1 };
+
+
+/*brief    base64算法编码
+ *param ： pu8Idata   ：输入需加密数据
+ *param ： u32Ilen    ：加密内容长度
+ *param ： pu8Odata   ：保存加密结果缓存
+ *param ： u32Olen    ：保存加密结果缓存长度
+ *return： 成功返回加密内容长度 失败返回-1
+ */
+__EX_API__ int wow_base64_encode(const uint8_t *pu8Idata, uint32_t u32Ilen,uint8_t *pu8Odata, uint32_t u32Olen)
+{
+    uint32_t i = 0;
+    uint32_t j = 0;
+	uint32_t len = 0;
+	
+	CHECK_RET_VAL_P(pu8Idata && u32Ilen && pu8Odata && u32Olen,-1,"param input invalid!\n");
+    len = 4 * ((u32Ilen + 2) / 3);
+	CHECK_RET_VAL_P(u32Olen >= len,-1,"param input invalid!\n");
+
+    for (i = 0, j = 0; i < u32Ilen;) {
+        uint32_t octet_a = i < u32Ilen ? (uint8_t) pu8Idata[i++] : 0;
+        uint32_t octet_b = i < u32Ilen ? (uint8_t) pu8Idata[i++] : 0;
+        uint32_t octet_c = i < u32Ilen ? (uint8_t) pu8Idata[i++] : 0;
+
+        uint32_t triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
+
+        pu8Odata[j++] = g_encodingTable[(triple >> 3 * 6) & 0x3F];
+        pu8Odata[j++] = g_encodingTable[(triple >> 2 * 6) & 0x3F];
+        pu8Odata[j++] = g_encodingTable[(triple >> 1 * 6) & 0x3F];
+        pu8Odata[j++] = g_encodingTable[(triple >> 0 * 6) & 0x3F];
+    }
+
+    for (i = 0; i < g_modTable[u32Ilen % 3]; i++) {
+        pu8Odata[len - 1 - i] = '=';
+    }
+
+    return len;
+}
+
+/*brief    base64算法解码
+ *param ： pu8Idata   ：输入需解密数据
+ *param ： u32Ilen    ：解密内容长度
+ *param ： pu8Odata   ：保存解密结果缓存
+ *param ： u32Olen    ：保存解密结果缓存长度
+ *return： 成功返回解密内容长度 失败返回-1
+ */
+__EX_API__ int wow_base64_decode(const uint8_t *pu8Idata, uint32_t u32Ilen,uint8_t *pu8Odata, uint32_t u32Olen)
+{
+    uint32_t i = 0;
+    uint32_t j = 0;
+    uint32_t sextet_a = 0;
+    uint32_t sextet_b = 0;
+    uint32_t sextet_c = 0;
+    uint32_t sextet_d = 0;
+    uint32_t triple = 0;
+	uint32_t len = 0;
+
+
+	CHECK_RET_VAL_P(pu8Idata && u32Ilen && pu8Odata && u32Olen,-1,"param input invalid!\n");
+	CHECK_RET_VAL_P(u32Ilen % 4 == 0,-1,"param input invalid!\n");
+		
+    len = u32Ilen / 4 * 3;
+    if (pu8Idata[u32Ilen - 1] == '=') {
+        len--;
+    }
+    if (pu8Idata[u32Ilen - 2] == '=') {
+        len--;
+    }
+	CHECK_RET_VAL_P(u32Olen >= len,-1,"rapam input invalid!\n");
+
+    for (i = 0, j = 0; i < u32Ilen;) {
+		
+        sextet_a = pu8Idata[i] == '=' ? 0 & i++ : g_decodingTable[pu8Idata[i++]];
+        sextet_b = pu8Idata[i] == '=' ? 0 & i++ : g_decodingTable[pu8Idata[i++]];
+        sextet_c = pu8Idata[i] == '=' ? 0 & i++ : g_decodingTable[pu8Idata[i++]];
+        sextet_d = pu8Idata[i] == '=' ? 0 & i++ : g_decodingTable[pu8Idata[i++]];
+		
+        triple = (sextet_a << 3 * 6) + (sextet_b << 2 * 6) + (sextet_c << 1 * 6) + (sextet_d << 0 * 6);
+
+        if (j < len) {
+            pu8Odata[j++] = (triple >> 2 * 8) & 0xFF;
+        }
+
+        if (j < len) {
+            pu8Odata[j++] = (triple >> 1 * 8) & 0xFF;
+        }
+
+        if (j < len) {
+            pu8Odata[j++] = (triple >> 0 * 8) & 0xFF;
+        }
+    }
+
+    return len;
+}
+
+

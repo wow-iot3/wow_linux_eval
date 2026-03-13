@@ -1,0 +1,14 @@
+{
+	"object1":	{
+		"string":	"hello world!",
+		"double":	12.123,
+		"int":	137,
+		"long":	1718675624107037,
+		"bool":	true
+	},
+	"object2":	{
+		"name":	"are you ok!"
+	},
+	"arrary1":	["abc", "def", "lmnopq"],
+	"arrary2":	[110, 120, 122, 119, 10086]
+}

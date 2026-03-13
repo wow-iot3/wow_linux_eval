@@ -1,0 +1,71 @@
+########################################################
+# Makefile模板                 
+# 接受PREFIX,HOST,LINKTYPE三个参数，例:
+# make PREFIX=/usr/bin HOST=arm-linux LINKTYPE=static
+########################################################
+PWD:=$(shell pwd)
+
+#要编译的目标库名称
+LIB_NAME:=libdemo
+OUTPUT_DIR:=$(PREFIX)
+
+CFLAGS := 
+CXXFLAGS :=
+
+ifeq ($(LINKTYPE),shared)
+CFLAGS += -fPIC
+CXXFLAGS += -fPIC
+TARGET := $(LIB_NAME).so
+else
+CFLAGS +=
+CXXFLAGS +=
+TARGET := $(LIB_NAME).a
+endif
+
+ifeq ($(HOST),)
+CROSS_COMPILE:=
+else
+CROSS_COMPILE:=$(HOST)-
+endif
+
+# 设置编译工具链
+CC := $(CROSS_COMPILE)gcc
+CPP := "$(CC) -E"
+CXX := $(CROSS_COMPILE)g++
+AR := $(CROSS_COMPILE)ar
+
+# 头文件列表,需要加"-I"前缀
+INCS := -I.
+
+# 源文件列表
+SRCS := demo.c
+
+OBJS := $(addsuffix .o,$(basename ${SRCS}))
+
+all: ${TARGET}
+
+${LIB_NAME}.a:	${OBJS}
+	$(AR) -r $@ ${OBJS}
+	
+${LIB_NAME}.so:	${OBJS}
+	$(CC) ${CFLAGS} -shared -o $@ ${OBJS}
+
+# Rules for compiling source files to object files
+%.o : %.cpp
+	${CXX} -c ${CXXFLAGS} ${INCS} $< -o $@
+
+%.o : %.c
+	${CC} -c ${CFLAGS} ${INCS} $< -o $@
+
+	
+install:
+	-mkdir -p $(OUTPUT_DIR)/lib
+	-mkdir -p $(OUTPUT_DIR)/bin
+	-mkdir -p $(OUTPUT_DIR)/include
+	cp $(TARGET) $(OUTPUT_DIR)/lib
+	cp *.h $(OUTPUT_DIR)/include/
+	
+.PHONY: clean
+clean:
+	@rm -rf *.a *.so
+	@find . -name "*.o" -exec rm -rf {} \;
